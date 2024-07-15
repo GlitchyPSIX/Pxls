@@ -32,7 +32,8 @@ public class IPReader implements HttpHandler {
             }
         }
 
-        exchange.putAttachment(IP, addr);
+        // psql inet makes it hard to test in local; no port/localhost permitted
+        exchange.putAttachment(IP, addr.split(":")[0].replace("localhost", "127.0.0.1"));
         next.handleRequest(exchange);
     }
 }
