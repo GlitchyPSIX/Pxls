@@ -151,7 +151,7 @@ public class App {
         }
     }
 
-    private static void handleCommand(String line) {
+    public static void handleCommand(String line) {
         try {
             String[] token = line.split(" ");
             if (token[0].equalsIgnoreCase("reload")) {
@@ -727,7 +727,7 @@ public class App {
                     System.err.println("Invalid expiry.");
                     return;
                 }
-                String body = token[3];
+                String body = String.join(" ", Arrays.copyOfRange(token, 3, token.length));
 
                 int id = App.getDatabase().createNotification(-1, title, body, expiry);
                 App.getServer().broadcast(new ServerNotification(App.getDatabase().getNotification(id)));
