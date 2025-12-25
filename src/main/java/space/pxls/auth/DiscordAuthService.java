@@ -5,6 +5,7 @@ import kong.unirest.JsonNode;
 import kong.unirest.Unirest;
 import kong.unirest.UnirestException;
 import kong.unirest.json.JSONObject;
+import kong.unirest.json.JSONString;
 import space.pxls.App;
 
 import java.util.Spliterator;
@@ -19,7 +20,7 @@ public class DiscordAuthService extends AuthService {
 
     public String getRedirectUrl(String state) {
         boolean requiresMembership = App.getConfig().getBoolean("oauth.discord.requireMembership");
-        String oauthScopes = requiresMembership ? "identify+guilds" : "identify";
+        String oauthScopes = requiresMembership ? "identify+guilds+guilds.members.read" : "identify";
         return "https://discord.com/api/oauth2/authorize?client_id=" + App.getConfig().getString("oauth.discord.key") + "&response_type=code&redirect_uri=" + getCallbackUrl() + "&duration=temporary&scope="+oauthScopes+"&state=" + state;
     }
 
@@ -51,6 +52,16 @@ public class DiscordAuthService extends AuthService {
         JSONObject json = me.getBody().getObject();
 
         boolean requiresMembership = App.getConfig().getBoolean("oauth.discord.requireMembership");
+        boolean membershipRoleRequired = false;
+
+        try {
+            App.getConfig().getLong("oauth.discord.membershipRole");
+            membershipRoleRequired = true;
+        }
+        catch (Exception _ex) {
+            // Alright man, no role required
+        }
+        
 
         if (json.has("error")) return null;
 
@@ -86,6 +97,26 @@ public class DiscordAuthService extends AuthService {
                 throw new InvalidAccountException("Account is not in the required Discord server");
             }
 
+            if(membershipRoleRequired){
+                HttpResponse<JsonNode> guildInfo = Unirest.get("https://discord.com/api/users/@me/guilds/" + requiredServerId + "/member")
+                    .header("Authorization", "Bearer " + token)
+                    .header("User-Agent", "pxls.space")
+                    .asJson();
+
+                long requiredRoleId = App.getConfig().getLong("oauth.discord.membershipRole");
+
+                Spliterator<Object> rolesSplit = Spliterators.spliteratorUnknownSize(
+                    guildInfo.getBody().getObject().getJSONArray("roles").iterator(),
+                    Spliterator.ORDERED);
+
+                boolean hasRole =
+                    StreamSupport.stream(rolesSplit, false)
+                    .anyMatch(server -> ((String) server).equals(Long.toString(requiredRoleId)));
+
+                if (!hasRole){
+                    throw new InvalidAccountException("Account does not have the required role");
+                }
+            }
         }
 
         return json.getString("id");
